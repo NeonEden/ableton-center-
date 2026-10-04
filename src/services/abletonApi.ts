@@ -309,8 +309,13 @@ export class AbletonClient {
     return { canalPath: this.canalPath, cratePath: this.cratePath };
   }
   /**
-   * Lee el estado real del Crate. Live expone cada peso como el texto del prompt
-   * ("0.9 | airy synth pad..."), así que de ahí salen el peso Y la etiqueta real.
+   * Lee el estado real del Crate para que el panel no muestre valores de ejemplo.
+   *
+   * Medido contra Live (4/10/2026): `bright`, `density`, `guidance`, `temp`, `topk`, los tres
+   * mutes y `key` SÍ son escribibles. Los 9 slots de prompt NO: Live los expone como parámetro
+   * de etiqueta (`min == max`), así que se leen pero no se escriben, y el texto del prompt no
+   * está disponible por ninguna vía (solo aparece en el mensaje con que el canal rechaza la
+   * escritura). Por eso las etiquetas caen a "prompt #N" y se editan en la app.
    */
   public async readCrateState(devicePath: string): Promise<Partial<InfiniteCrateState> | null> {
     const r = await this.callTool('ppal-read-device', { path: devicePath, include: ['*'] });
