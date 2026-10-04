@@ -1,0 +1,6 @@
+{
+  "name": "Centro Creativo // Ableton Copilot",
+  "description": "Centro creativo y copiloto para productor musical con control directo de Ableton Live 12, The Infinite Crate (Lyria) y análisis sónico de mezcla.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
