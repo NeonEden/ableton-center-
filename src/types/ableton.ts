@@ -3,16 +3,28 @@
  */
 
 export type ToolName =
+  // las 21 tools reales del canal (verificadas contra Live, 4/10/2026)
+  | 'ppal-connect'
+  | 'ppal-context'
   | 'ppal-read-live-set'
-  | 'ppal-create-track'
-  | 'ppal-create-clip'
-  | 'ppal-create-device'
-  | 'ppal-read-device'
-  | 'ppal-update-device'
-  | 'ppal-playback'
   | 'ppal-update-live-set'
-  | 'ppal-library'
-  | 'ppal-delete';
+  | 'ppal-read-track'
+  | 'ppal-create-track'
+  | 'ppal-update-track'
+  | 'ppal-read-scene'
+  | 'ppal-create-scene'
+  | 'ppal-update-scene'
+  | 'ppal-read-clip'
+  | 'ppal-create-clip'
+  | 'ppal-update-clip'
+  | 'ppal-read-device'
+  | 'ppal-create-device'
+  | 'ppal-update-device'
+  | 'ppal-delete'
+  | 'ppal-duplicate'
+  | 'ppal-select'
+  | 'ppal-playback'
+  | 'ppal-library';
 
 export interface DeviceParameter {
   id: string;

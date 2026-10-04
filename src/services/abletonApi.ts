@@ -278,6 +278,37 @@ export class AbletonClient {
   private isCheckingConnection: boolean = false;
   private onBitacoraCallback?: (item: BitacoraItem) => void;
 
+  /** Pista que contiene el dispositivo Producer_Pal (el canal). Se resuelve leyendo el set. */
+  public canalPath: string | null = null;
+  /** Path real del dispositivo The Infinite Crate (cambia si el usuario mueve las pistas). */
+  public cratePath: string | null = null;
+
+  /**
+   * Resuelve los dos dispositivos especiales leyendo el set real.
+   * NUNCA se hardcodean los paths: el usuario mueve pistas y los índices cambian.
+   */
+  public async resolveSpecialDevices(): Promise<{ canalPath: string | null; cratePath: string | null }> {
+    this.canalPath = null;
+    this.cratePath = null;
+    try {
+      const set = await this.callTool('ppal-read-live-set', { include: ['tracks'] });
+      const tracks: any[] = (set.result?.tracks as any[]) || [];
+      for (const t of tracks) {
+        if (!t?.path || !t?.deviceCount) continue;
+        const tr = await this.callTool('ppal-read-track', { path: t.path, include: ['devices'], maxDepth: 3 });
+        const devs: any[] = tr.result?.devices || [];
+        for (const d of devs) {
+          const nombre = String(d?.name ?? '');
+          if (/producer_?pal/i.test(nombre)) this.canalPath = t.path;
+          if (/infinite_?crate/i.test(nombre) || /infinite crate/i.test(String(d?.type ?? ''))) this.cratePath = d?.path ?? null;
+        }
+      }
+    } catch {
+      /* si el DAW no responde, quedan en null y el modo simulado toma el control */
+    }
+    return { canalPath: this.canalPath, cratePath: this.cratePath };
+  }
+
   constructor() {
     this.isSimulatedMode = false;
   }
@@ -338,7 +369,8 @@ export class AbletonClient {
     // Verificación preventiva de Regla de Oro 2:
     if (tool === 'ppal-delete' && payload.type === 'track') {
       const targetPath = payload.path;
-      if (targetPath === 't3' || targetPath?.includes('producer_pal')) {
+      // El canal se resuelve leyendo el set (resolveSpecialDevices), no se hardcodea:
+      if (targetPath && (targetPath === this.canalPath || targetPath?.includes('producer_pal'))) {
         const errResult = 'Violación de Regla de Oro: NUNCA borres la pista que contiene Producer_Pal (es el canal de comunicación). Operación abortada.';
         this.recordBitacora(tool, payload, { error: errResult }, true, false, errResult, 10);
         return {

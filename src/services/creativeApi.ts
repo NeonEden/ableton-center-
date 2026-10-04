@@ -26,12 +26,26 @@ export interface GeneratedMidiResult {
   chords: string[];
 }
 
-export async function postCreativoDirigir(imageFile: File | string): Promise<VisualBrief> {
+export async function postCreativoDirigir(imageFile: File | string, texto?: string): Promise<VisualBrief> {
   try {
+    // Acepta: un File (se lee a base64), un data-URL, o una ruta en disco
+    let imagen_b64: string | undefined;
+    let imagen: string | undefined;
+    if (typeof imageFile === 'string') {
+      if (imageFile.startsWith('data:') || imageFile.length > 500) imagen_b64 = imageFile;
+      else imagen = imageFile;
+    } else {
+      imagen_b64 = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result));
+        r.onerror = () => reject(r.error);
+        r.readAsDataURL(imageFile);
+      });
+    }
     const res = await fetch('/api/creativo/dirigir', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: typeof imageFile === 'string' ? imageFile : 'base64_upload' })
+      body: JSON.stringify({ imagen_b64, imagen, texto })
     });
     if (res.ok) {
       return await res.json();

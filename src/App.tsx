@@ -178,7 +178,13 @@ export default function App() {
       setIsConnected(ok);
       setIsSimulated(!ok);
       if (ok) {
+        // Resolver los dos dispositivos especiales (canal y Crate) leyendo el set real:
+        // sus paths cambian si el usuario mueve las pistas.
+        const { cratePath } = await abletonClient.resolveSpecialDevices();
+        if (cratePath) setCrateState((prev) => ({ ...prev, devicePath: cratePath as string }));
         handleRefreshSet();
+        setIsConnected(true);
+        setIsSimulated(false);
       }
     };
     probe();
@@ -400,8 +406,9 @@ export default function App() {
   };
 
   // Action: Delete Track (ppal-delete)
-  const handleDeleteTrack = async (trackPath: string, isBridge: boolean) => {
-    if (isBridge) {
+  const handleDeleteTrack = async (trackPath: string, _isBridge: boolean) => {
+    // La pista del canal se resuelve leyendo el set, nunca por un índice fijo
+    if (trackPath === abletonClient.canalPath) {
       alert('REGLA DE ORO: NUNCA borres la pista de Producer_Pal. Es el canal de comunicación con Live.');
       return;
     }

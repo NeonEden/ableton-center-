@@ -17,6 +17,11 @@ export default defineConfig(() => {
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      // El CEREBRO local (cerebro.py) escucha en 3351: la app le habla por rutas
+      // relativas para que las claves de Gemini nunca toquen el navegador.
+      proxy: {
+        '/api/creativo': { target: 'http://127.0.0.1:3351', changeOrigin: true },
+      },
     },
   };
 });
