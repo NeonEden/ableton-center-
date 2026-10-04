@@ -211,7 +211,7 @@ export const JudgeColumn: React.FC<Props> = ({
                     min={1}
                     max={12}
                     value={crateState.keyNumber}
-                    onChange={(e) => onUpdateCrateParam('key_num', parseInt(e.target.value, 10))}
+                    onChange={(e) => onUpdateCrateParam('key (CM/Am=1)', parseInt(e.target.value, 10))}
                     className="w-10 bg-[#0e1014] border border-[#252935] rounded px-1.5 py-0.5 text-center font-mono font-bold text-[#ff7034]"
                   />
                 </div>

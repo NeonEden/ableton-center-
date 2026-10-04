@@ -313,7 +313,8 @@ export default function App() {
   // Action: Update Infinite Crate Mute
   const handleUpdateCrateMute = async (muteType: 'bass' | 'drums' | 'other', value: boolean) => {
     const key = muteType === 'bass' ? 'muteBass' : muteType === 'drums' ? 'muteDrums' : 'muteOther';
-    const paramId = `mute_${muteType}`;
+    // Los parámetros reales del Crate en Live se llaman 'mute bass', 'mute drums', 'mute other'
+    const paramId = `mute ${muteType}`;
 
     const nextCrate = { ...crateState, [key]: value };
     setCrateState(nextCrate);
