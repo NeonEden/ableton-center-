@@ -181,7 +181,12 @@ export default function App() {
         // Resolver los dos dispositivos especiales (canal y Crate) leyendo el set real:
         // sus paths cambian si el usuario mueve las pistas.
         const { cratePath } = await abletonClient.resolveSpecialDevices();
-        if (cratePath) setCrateState((prev) => ({ ...prev, devicePath: cratePath as string }));
+        if (cratePath) {
+          setCrateState((prev) => ({ ...prev, devicePath: cratePath as string }));
+          // Traer los valores REALES del plugin (pesos y textos), no los de ejemplo
+          const real = await abletonClient.readCrateState(cratePath as string);
+          if (real) setCrateState((prev) => ({ ...prev, ...real, devicePath: cratePath as string }));
+        }
         handleRefreshSet();
         setIsConnected(true);
         setIsSimulated(false);

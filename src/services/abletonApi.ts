@@ -308,6 +308,28 @@ export class AbletonClient {
     }
     return { canalPath: this.canalPath, cratePath: this.cratePath };
   }
+  /**
+   * Lee el estado real del Crate. Live expone cada peso como el texto del prompt
+   * ("0.9 | airy synth pad..."), así que de ahí salen el peso Y la etiqueta real.
+   */
+  public async readCrateState(devicePath: string): Promise<Partial<InfiniteCrateState> | null> {
+    const r = await this.callTool('ppal-read-device', { path: devicePath, include: ['*'] });
+    const params: any[] = r.result?.parameters || [];
+    if (!params.length) return null;
+    const porNombre = new Map<string, any>(params.map((p) => [String(p.name), p.value]));
+    const num = (k: string) => { const n = parseFloat(String(porNombre.get(k))); return Number.isFinite(n) ? n : undefined; };
+    const slots = [];
+    for (let i = 1; i <= 9; i++) {
+      const bruto = String(porNombre.get(`prompt #${i}`) ?? '');
+      const m = bruto.match(/^\s*(-?[\d.]+)\s*\|\s*(.*)$/);
+      slots.push({ id: i, weight: m ? parseFloat(m[1]) : (parseFloat(bruto) || 0), label: m ? m[2] : `prompt #${i}` });
+    }
+    return {
+      bright: num('bright'), density: num('density'), guidance: num('guidance'), temp: num('temp'), topk: num('topk'),
+      muteBass: num('mute bass') === 1, muteDrums: num('mute drums') === 1, muteOther: num('mute other') === 1,
+      keyNumber: num('key (CM/Am=1)'), slots,
+    } as Partial<InfiniteCrateState>;
+  }
 
   constructor() {
     this.isSimulatedMode = false;
@@ -417,7 +439,10 @@ export class AbletonClient {
 
       const json = await res.json();
       const duration = Math.round(performance.now() - startTime);
-      const isError = Boolean(json.isError);
+      // El canal a veces devuelve un string que empieza con "Error:" sin marcar isError:
+      // tratarlo como error para que la bitácora no mienta.
+      const isError =
+        Boolean(json.isError) || (typeof json.result === 'string' && json.result.startsWith('Error:'));
       const evidence = isError
         ? `Error reportado por Live: ${json.result}`
         : `Ejecutado en DAW (Live 12.4.6) en ${duration}ms`;

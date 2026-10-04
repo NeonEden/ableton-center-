@@ -261,7 +261,7 @@ export const JudgeColumn: React.FC<Props> = ({
                   Mezclador de Prompts (Slots 1 a 9)
                 </span>
                 <span className="text-[10px] text-[#7d8799]">
-                  Pesos 0.0 - 1.0 aplicados en vivo
+                  Pesos reales leídos del plugin · sólo lectura
                 </span>
               </div>
 
@@ -316,13 +316,12 @@ export const JudgeColumn: React.FC<Props> = ({
                       <input
                         type="range"
                         min={0.0}
-                        max={1.0}
+                        max={2.0}
                         step={0.02}
                         value={slot.weight}
-                        onChange={(e) =>
-                          onUpdateCratePromptWeight(slot.id, parseFloat(e.target.value))
-                        }
-                        className="w-full"
+                        disabled
+                        title="Live expone este parámetro como texto (peso + prompt): se lee, no se escribe. Movelo dentro del plugin."
+                        className="w-full opacity-60 cursor-not-allowed"
                       />
                     </div>
                   );
