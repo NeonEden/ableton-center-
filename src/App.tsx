@@ -14,6 +14,7 @@ import { HistoryTimelineModal } from './components/HistoryTimelineModal';
 import {
   BitacoraItem,
   InfiniteCrateState,
+  LiveDevice,
   LiveSet,
   ShortcutConfig,
   SonicAnalysis,
@@ -208,8 +209,26 @@ export default function App() {
       if (!res.isError && res.result) {
         const fetchedSet = res.result as LiveSet;
         if (fetchedSet.tracks) {
-          setLiveSet(fetchedSet);
-          recordSnapshot('Sincronización completa con Ableton Live (Set releído)', fetchedSet, crateState);
+          // read-live-set sólo trae el CONTEO de dispositivos: hay que pedirlos por pista.
+          // Sin esto la columna izquierda muestra "1 disp." donde hay 6 y ningún control funciona.
+          const conDispositivos = await Promise.all(
+            fetchedSet.tracks.map(async (t) => {
+              if (!t.deviceCount) return t;
+              try {
+                const dt = await abletonClient.callTool('ppal-read-track', {
+                  path: t.path,
+                  include: ['devices'],
+                  maxDepth: 3
+                });
+                return { ...t, devices: (dt.result?.devices ?? []) as LiveDevice[] };
+              } catch {
+                return t;
+              }
+            })
+          );
+          const completo: LiveSet = { ...fetchedSet, tracks: conDispositivos };
+          setLiveSet(completo);
+          recordSnapshot('Sincronización completa con Ableton Live (Set releído)', completo, crateState);
         }
       }
     } catch (err: any) {
@@ -355,10 +374,22 @@ export default function App() {
       description: `Peso Slot #${slotId}`
     });
 
-    await abletonClient.callTool('ppal-update-device', {
-      path: crateState.devicePath,
-      params: [{ id: `prompt #${slotId}`, value: weight }]
-    });
+    // NO se escribe en el DAW: Live expone estos slots como parámetro de etiqueta (min == max),
+    // la escritura se ignora y la bitácora registraría un éxito falso. Se cambia dentro del plugin.
+    setBitacora((prev) => [
+      {
+        id: `bit_slot_${Date.now()}`,
+        timestamp: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        tool: 'ppal-update-device',
+        payload: { path: crateState.devicePath, params: [{ id: `prompt #${slotId}`, value: weight }] },
+        response: { aplicado: false, motivo: 'parámetro de sólo lectura en Live (min == max)' },
+        isError: false,
+        isSimulated: isSimulated,
+        evidence: `Slot #${slotId} ("${label}") = ${weight.toFixed(2)} — anotado localmente; se mueve dentro del plugin`,
+        durationMs: 0
+      },
+      ...prev
+    ]);
   };
 
   const handleUpdateCrateSlotLabel = (slotId: number, newLabel: string) => {
