@@ -13,10 +13,19 @@ import {
   CheckCircle,
   Clock,
   Layers,
-  Edit3
+  Edit3,
+  MapPin,
+  Copy,
+  Split,
+  Repeat,
+  Shuffle,
+  Flame,
+  Scissors,
+  Disc3
 } from 'lucide-react';
-import { SongSection, VisualBrief } from '../types/ableton';
+import { SongSection, VariationPreset, VisualBrief } from '../types/ableton';
 import { isAudioPreviewPlaying, playBoomBapPreview, stopPreview } from '../utils/audioEngine';
+import { VARIATION_PRESETS } from '../utils/variationPresets';
 
 interface Props {
   selectedTrackPath: string;
@@ -24,6 +33,14 @@ interface Props {
   onUpdateBrief: (updated: Partial<VisualBrief>) => void;
   onDropImage: (file: File) => void;
   onGenerate: (type: 'lyria' | 'midi' | 'letra') => void;
+  onApplyLocators: (sections: SongSection[]) => void;
+  onDuplicateClip: (sourceTrackPath: string, sourceSlot: string, targetSlot: string) => void;
+  onApplyVariation: (
+    variation: VariationPreset,
+    targetTrackPath: string,
+    targetSlot: string,
+    autoPlay: boolean
+  ) => void;
   onApplyToDaw: (clipConfig: {
     trackPath: string;
     name: string;
@@ -41,6 +58,11 @@ interface Props {
     density: number;
     guidance: number;
   }) => void;
+  onOpenPianoRoll?: () => void;
+  onOpenChordPalette?: () => void;
+  onOpenSampleSlicer?: () => void;
+  onOpenDrumSequencer?: () => void;
+  onOpenCrateScenes?: () => void;
   isBusy: boolean;
   generatedMidiData: {
     trackName: string;
@@ -57,15 +79,29 @@ export const CreateColumn: React.FC<Props> = ({
   onUpdateBrief,
   onDropImage,
   onGenerate,
+  onApplyLocators,
+  onDuplicateClip,
+  onApplyVariation,
   onApplyToDaw,
   onMutateSelectedClip,
+  onOpenPianoRoll,
+  onOpenChordPalette,
+  onOpenSampleSlicer,
+  onOpenDrumSequencer,
+  onOpenCrateScenes,
   isBusy,
   generatedMidiData,
   generatedLyrics
 }) => {
-  const [activeTab, setActiveTab] = useState<'brief' | 'generar' | 'mutar' | 'aplicar'>('generar');
+  const [activeTab, setActiveTab] = useState<'brief' | 'generar' | 'variaciones' | 'mutar' | 'aplicar'>('generar');
   const [isPlayingWebAudio, setIsPlayingWebAudio] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+
+  // Variations & Fills State
+  const [selectedPresetId, setSelectedPresetId] = useState<string>(VARIATION_PRESETS[0].id);
+  const [varSourceSlot, setVarSourceSlot] = useState<string>('s0');
+  const [varTargetSlot, setVarTargetSlot] = useState<string>('s1');
+  const [varAutoPlay, setVarAutoPlay] = useState<boolean>(true);
 
   // Song sections structure
   const [sections, setSections] = useState<SongSection[]>([
@@ -164,6 +200,18 @@ export const CreateColumn: React.FC<Props> = ({
           </button>
 
           <button
+            onClick={() => setActiveTab('variaciones')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'variaciones'
+                ? 'bg-[#ff7034] text-white shadow-xs'
+                : 'text-[#8c94a5] hover:text-[#e0e4ec]'
+            }`}
+          >
+            <Flame className="w-3.5 h-3.5" />
+            <span>Fills & Variaciones</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('mutar')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'mutar'
@@ -208,6 +256,99 @@ export const CreateColumn: React.FC<Props> = ({
         {/* TAB 1: GENERAR */}
         {activeTab === 'generar' && (
           <div className="space-y-4">
+            {/* Herramientas Principales del Copiloto */}
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2.5 p-3 rounded-xl bg-[#13151c] border border-[#232734]">
+              {onOpenPianoRoll && (
+                <button
+                  onClick={onOpenPianoRoll}
+                  className="p-2.5 rounded-lg bg-[#181a24] hover:bg-[#202330] border border-amber-500/30 text-left transition flex flex-col justify-between group cursor-pointer"
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                      <SlidersHorizontal size={13} className="text-amber-400" />
+                      Piano Roll
+                    </span>
+                    <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-amber-950/40 text-amber-300 border border-amber-500/30">
+                      MPC
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-zinc-400 mt-1">Swing 54-68% & Humanize</p>
+                </button>
+              )}
+
+              {onOpenDrumSequencer && (
+                <button
+                  onClick={onOpenDrumSequencer}
+                  className="p-2.5 rounded-lg bg-[#181a24] hover:bg-[#202330] border border-orange-500/30 text-left transition flex flex-col justify-between group cursor-pointer"
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-xs font-bold text-orange-300 flex items-center gap-1.5">
+                      <Disc3 size={13} className="text-orange-400" />
+                      Batería MPC
+                    </span>
+                    <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-orange-950/40 text-orange-300 border border-orange-500/30">
+                      16p
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-zinc-400 mt-1">Ghost Notes & Pocket</p>
+                </button>
+              )}
+
+              {onOpenChordPalette && (
+                <button
+                  onClick={onOpenChordPalette}
+                  className="p-2.5 rounded-lg bg-[#181a24] hover:bg-[#202330] border border-indigo-500/30 text-left transition flex flex-col justify-between group cursor-pointer"
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
+                      <Music size={13} className="text-indigo-400" />
+                      Acordes Soul
+                    </span>
+                    <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-indigo-950/40 text-indigo-300 border border-indigo-500/30">
+                      Neo
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-zinc-400 mt-1">Voicings Drop-2 & Rootless</p>
+                </button>
+              )}
+
+              {onOpenSampleSlicer && (
+                <button
+                  onClick={onOpenSampleSlicer}
+                  className="p-2.5 rounded-lg bg-[#181a24] hover:bg-[#202330] border border-rose-500/30 text-left transition flex flex-col justify-between group cursor-pointer"
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-xs font-bold text-rose-300 flex items-center gap-1.5">
+                      <Scissors size={13} className="text-rose-400" />
+                      Slicer Chops
+                    </span>
+                    <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-rose-950/40 text-rose-300 border border-rose-500/30">
+                      Live
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-zinc-400 mt-1">16 Pads & ppal-library</p>
+                </button>
+              )}
+
+              {onOpenCrateScenes && (
+                <button
+                  onClick={onOpenCrateScenes}
+                  className="p-2.5 rounded-lg bg-[#181a24] hover:bg-[#202330] border border-emerald-500/30 text-left transition flex flex-col justify-between group cursor-pointer"
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                      <Layers size={13} className="text-emerald-400" />
+                      Escenas Crate
+                    </span>
+                    <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-emerald-950/40 text-emerald-300 border border-emerald-500/30">
+                      Morph
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-zinc-400 mt-1">Morfosis en 4 Compases</p>
+                </button>
+              )}
+            </div>
+
             {/* Generate Action Buttons */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <button
@@ -261,16 +402,29 @@ export const CreateColumn: React.FC<Props> = ({
 
             {/* Song Structure Editor */}
             <div className="p-3.5 bg-[#14161d] border border-[#232732] rounded-lg space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Layers className="w-4 h-4 text-[#ff7034]" />
                   <h3 className="text-xs font-bold uppercase tracking-wider text-[#e2e6ed]">
                     Estructura por Secciones
                   </h3>
                 </div>
-                <span className="text-xs font-mono font-semibold text-[#8c94a5]">
-                  Total: <strong className="text-[#ff7034]">{totalBars} compases</strong> (~{Math.round((totalBars * 4 * 60) / 90)} s)
-                </span>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => onApplyLocators(sections)}
+                    disabled={isBusy}
+                    className="px-2.5 py-1 bg-[#1e2330] hover:bg-[#ff7034] text-[#d6dae3] hover:text-white rounded text-[11px] font-medium transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    title="Crea locators reales en la regla de compases de Ableton Live (1|1, 5|1, etc.) con ppal-update-live-set"
+                  >
+                    <MapPin className="w-3.5 h-3.5 text-[#ff7034] group-hover:text-white" />
+                    <span>Plasmar en Arrangement</span>
+                  </button>
+
+                  <span className="text-xs font-mono font-semibold text-[#8c94a5]">
+                    Total: <strong className="text-[#ff7034]">{totalBars} compases</strong> (~{Math.round((totalBars * 4 * 60) / 90)} s)
+                  </span>
+                </div>
               </div>
 
               <div className="space-y-1.5">
@@ -567,6 +721,151 @@ export const CreateColumn: React.FC<Props> = ({
               >
                 <Wand2 className="w-3.5 h-3.5" />
                 <span>Mutar el clip seleccionado</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: VARIACIONES Y FILLS */}
+        {activeTab === 'variaciones' && (
+          <div className="p-4 bg-[#14161d] border border-[#232732] rounded-lg space-y-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <Flame className="w-4 h-4 text-[#ff7034]" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#e2e6ed]">
+                  Generador de Variaciones & Fills (Boom Bap / Neo-Soul)
+                </h3>
+              </div>
+              <p className="text-xs text-[#7d8799] mt-0.5">
+                Genera cortes de compás 4, redobles con ghost notes y subdivisión de charles usando <code className="text-[#ff7034]">ppal-duplicate</code> y transformaciones rítmicas.
+              </p>
+            </div>
+
+            {/* Presets List */}
+            <div className="space-y-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#a0a9bc]">
+                Presets de Variación para el 4to Compás:
+              </span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                {VARIATION_PRESETS.map((preset) => {
+                  const isSelected = selectedPresetId === preset.id;
+                  return (
+                    <div
+                      key={preset.id}
+                      onClick={() => setSelectedPresetId(preset.id)}
+                      className={`p-3 rounded-lg border text-left cursor-pointer transition-all ${
+                        isSelected
+                          ? 'bg-[#1c212d] border-[#ff7034] shadow-xs'
+                          : 'bg-[#12141a] border-[#20242f] hover:border-[#2f3545]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs font-semibold ${isSelected ? 'text-[#ff7034]' : 'text-[#f0f2f5]'}`}>
+                          {preset.name}
+                        </span>
+                        <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 bg-[#0e1014] text-[#8c94a5] rounded border border-[#232733]">
+                          {preset.category}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#7d8799] mt-1 leading-snug">
+                        {preset.description}
+                      </p>
+                      {preset.transforms && (
+                        <div className="mt-2 font-mono text-[10px] text-[#ff9e6a] bg-[#0b0c10] px-2 py-0.5 rounded border border-[#1d212c]">
+                          {preset.transforms}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Source & Destination Slot Selector */}
+            <div className="p-3 bg-[#0e1014] border border-[#20242f] rounded-lg grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div className="space-y-1">
+                <label className="text-[11px] text-[#8c94a5]">Pista Destino:</label>
+                <div className="font-mono font-bold text-[#ff7034] bg-[#161922] px-2.5 py-1.5 rounded border border-[#262b38]">
+                  {selectedTrackPath || 't0'} (Pista actual)
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] text-[#8c94a5]">Slot Origen (Base):</label>
+                <select
+                  value={varSourceSlot}
+                  onChange={(e) => setVarSourceSlot(e.target.value)}
+                  className="w-full px-2.5 py-1.5 bg-[#161922] border border-[#262b38] rounded font-mono text-[#f0f2f5] focus:outline-none focus:border-[#ff7034]"
+                >
+                  <option value="s0">s0 (Escena 1)</option>
+                  <option value="s1">s1 (Escena 2)</option>
+                  <option value="s2">s2 (Escena 3)</option>
+                  <option value="s3">s3 (Escena 4)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] text-[#8c94a5]">Slot Destino (Variación):</label>
+                <select
+                  value={varTargetSlot}
+                  onChange={(e) => setVarTargetSlot(e.target.value)}
+                  className="w-full px-2.5 py-1.5 bg-[#161922] border border-[#262b38] rounded font-mono text-[#f0f2f5] focus:outline-none focus:border-[#ff7034]"
+                >
+                  <option value="s1">s1 (Escena 2)</option>
+                  <option value="s2">s2 (Escena 3)</option>
+                  <option value="s3">s3 (Escena 4)</option>
+                  <option value="s4">s4 (Escena 5)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Notes preview of selected preset */}
+            {(() => {
+              const currentPreset = VARIATION_PRESETS.find((p) => p.id === selectedPresetId) || VARIATION_PRESETS[0];
+              return (
+                <div className="p-3 bg-[#0a0c10] border border-[#1b1e27] rounded text-xs space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-mono text-[#8c94a5]">
+                      Secuencia MIDI de notas calculadas (bar|beat):
+                    </span>
+                    <label className="flex items-center gap-1.5 cursor-pointer text-[#8c94a5] text-[11px]">
+                      <input
+                        type="checkbox"
+                        checked={varAutoPlay}
+                        onChange={(e) => setVarAutoPlay(e.target.checked)}
+                      />
+                      <span>Auto-disparar en Live (auto: play-clip)</span>
+                    </label>
+                  </div>
+                  <pre className="font-mono text-[10px] text-[#9ba4b4] max-h-24 overflow-y-auto leading-relaxed">
+                    {currentPreset.notesString}
+                  </pre>
+                </div>
+              );
+            })()}
+
+            {/* Action Buttons */}
+            <div className="pt-2 border-t border-[#222631] flex flex-wrap items-center justify-end gap-2">
+              <button
+                onClick={() => onDuplicateClip(selectedTrackPath || 't0', varSourceSlot, varTargetSlot)}
+                disabled={isBusy}
+                className="px-3.5 py-2 bg-[#20242e] hover:bg-[#2b303d] border border-[#2f3544] text-[#d6dae3] hover:text-white text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                title="Duplica el clip en Ableton Live vía ppal-duplicate"
+              >
+                <Copy className="w-3.5 h-3.5 text-[#7ea5e8]" />
+                <span>Duplicar Clip (ppal-duplicate)</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  const currentPreset = VARIATION_PRESETS.find((p) => p.id === selectedPresetId) || VARIATION_PRESETS[0];
+                  onApplyVariation(currentPreset, selectedTrackPath || 't0', varTargetSlot, varAutoPlay);
+                }}
+                disabled={isBusy}
+                className="px-4 py-2 bg-[#ff7034] hover:bg-[#ff854f] text-white text-xs font-bold rounded-md transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-md"
+              >
+                <Flame className="w-3.5 h-3.5" />
+                <span>Inyectar Variación en Live</span>
               </button>
             </div>
           </div>

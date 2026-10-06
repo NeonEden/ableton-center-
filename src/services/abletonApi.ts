@@ -529,6 +529,20 @@ export class AbletonClient {
           timelinePos: '1|1'
         };
 
+      case 'ppal-select':
+        return {
+          status: 'selected',
+          path: payload.path
+        };
+
+      case 'ppal-duplicate':
+        return {
+          status: 'duplicated',
+          type: payload.type || 'clip',
+          path: payload.path,
+          destination: payload.destination || `${payload.path}_dup`
+        };
+
       case 'ppal-update-live-set':
         return {
           tempo: payload.tempo ?? 90,

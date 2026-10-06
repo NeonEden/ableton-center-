@@ -11,13 +11,20 @@ import { JudgeColumn } from './components/JudgeColumn';
 import { VstBrowserModal } from './components/VstBrowserModal';
 import { ShortcutsModal, DEFAULT_SHORTCUTS } from './components/ShortcutsModal';
 import { HistoryTimelineModal } from './components/HistoryTimelineModal';
+import { PianoRollModal } from './components/PianoRollModal';
+import { ChordPaletteModal } from './components/ChordPaletteModal';
+import { SampleSlicerModal } from './components/SampleSlicerModal';
+import { DrumSequencerModal } from './components/DrumSequencerModal';
+import { CrateScenesModal, CrateScene } from './components/CrateScenesModal';
 import {
   BitacoraItem,
   InfiniteCrateState,
   LiveDevice,
   LiveSet,
   ShortcutConfig,
+  SongSection,
   SonicAnalysis,
+  VariationPreset,
   VisualBrief,
   VstPlugin
 } from './types/ableton';
@@ -105,11 +112,20 @@ export default function App() {
 
   const [generatedLyrics, setGeneratedLyrics] = useState<string | null>(null);
 
-  // 6. Modals
+  // 6. Modals & Extended Feature States
   const [isVstModalOpen, setIsVstModalOpen] = useState(false);
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [isPianoRollModalOpen, setIsPianoRollModalOpen] = useState(false);
+  const [isChordPaletteModalOpen, setIsChordPaletteModalOpen] = useState(false);
+  const [isSampleSlicerModalOpen, setIsSampleSlicerModalOpen] = useState(false);
+  const [isDrumSequencerOpen, setIsDrumSequencerOpen] = useState(false);
+  const [isCrateScenesOpen, setIsCrateScenesOpen] = useState(false);
+  const [isMorphingCrate, setIsMorphingCrate] = useState(false);
+  const [morphProgress, setMorphProgress] = useState(0);
   const [shortcuts, setShortcuts] = useState<ShortcutConfig[]>(DEFAULT_SHORTCUTS);
+  const [isAutoFocusEnabled, setIsAutoFocusEnabled] = useState<boolean>(true);
+  const [isCrateAutoPollActive, setIsCrateAutoPollActive] = useState<boolean>(true);
 
   // 7. DAW Undo / Redo History Hook
   const {
@@ -195,6 +211,56 @@ export default function App() {
     };
     probe();
   }, []);
+
+  // Background Crate Auto-Polling Effect (cada 3 segundos sincroniza potes movidos dentro de Live)
+  useEffect(() => {
+    if (!isConnected || isSimulated || !isCrateAutoPollActive) return;
+
+    const interval = setInterval(async () => {
+      if (isBusy || !crateState.devicePath) return;
+      try {
+        const real = await abletonClient.readCrateState(crateState.devicePath);
+        if (real) {
+          setCrateState((prev) => {
+            const changed =
+              (real.bright !== undefined && Math.abs(real.bright - prev.bright) > 0.01) ||
+              (real.density !== undefined && Math.abs(real.density - prev.density) > 0.01) ||
+              (real.guidance !== undefined && Math.abs(real.guidance - prev.guidance) > 0.1) ||
+              (real.temp !== undefined && Math.abs(real.temp - prev.temp) > 0.01) ||
+              (real.topk !== undefined && real.topk !== prev.topk) ||
+              (real.muteBass !== undefined && real.muteBass !== prev.muteBass) ||
+              (real.muteDrums !== undefined && real.muteDrums !== prev.muteDrums) ||
+              (real.muteOther !== undefined && real.muteOther !== prev.muteOther) ||
+              (real.keyNumber !== undefined && real.keyNumber !== prev.keyNumber);
+
+            if (changed) {
+              return { ...prev, ...real, devicePath: prev.devicePath };
+            }
+            return prev;
+          });
+        }
+      } catch {
+        // Silencioso en background
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [isConnected, isSimulated, isCrateAutoPollActive, isBusy, crateState.devicePath]);
+
+  // Action: Select Track with Auto-Focus DAW (ppal-select)
+  const handleSelectTrack = async (path: string) => {
+    setSelectedTrackPath(path);
+    if (isAutoFocusEnabled && isConnected && !isSimulated) {
+      await abletonClient.callTool('ppal-select', { path });
+    }
+  };
+
+  // Action: Select Device with Auto-Focus DAW (ppal-select)
+  const handleSelectDevice = async (devicePath: string) => {
+    if (isAutoFocusEnabled && isConnected && !isSimulated) {
+      await abletonClient.callTool('ppal-select', { path: devicePath });
+    }
+  };
 
   // Action: Refresh Live Set (ppal-read-live-set)
   const handleRefreshSet = async () => {
@@ -599,6 +665,87 @@ export default function App() {
     setBusyMessage('');
   };
 
+  // Action: Inyectar Secciones al Arrangement vía Locators (ppal-update-live-set)
+  const handleApplyLocators = async (sections: SongSection[]) => {
+    setIsBusy(true);
+    setBusyMessage('Inyectando locators de estructura en Arrangement de Live…');
+    let currentBar = 1;
+    const createdList: string[] = [];
+
+    for (const sec of sections) {
+      const locatorTime = `${currentBar}|1`;
+      await abletonClient.callTool('ppal-update-live-set', {
+        locatorOperation: 'create',
+        locatorTime,
+        locatorName: sec.name
+      });
+      createdList.push(`${sec.name} (${locatorTime})`);
+      currentBar += sec.bars;
+    }
+
+    recordSnapshot(
+      `Locators de estructura creados en Arrangement: ${createdList.join(', ')}`,
+      liveSet,
+      crateState
+    );
+    setIsBusy(false);
+    setBusyMessage('');
+  };
+
+  // Action: Duplicar Clip en Live (ppal-duplicate)
+  const handleDuplicateClip = async (sourceTrackPath: string, sourceSlot: string, targetSlot: string) => {
+    setIsBusy(true);
+    const srcClipPath = `${sourceTrackPath}/${sourceSlot}`;
+    const tgtClipPath = `${sourceTrackPath}/${targetSlot}`;
+    setBusyMessage(`Duplicando clip ${srcClipPath} a ${tgtClipPath}…`);
+
+    const res = await abletonClient.callTool('ppal-duplicate', {
+      type: 'clip',
+      path: srcClipPath,
+      destination: tgtClipPath
+    });
+
+    if (!res.isError) {
+      recordSnapshot(`Clip duplicado en Live: ${srcClipPath} -> ${tgtClipPath}`, liveSet, crateState);
+      await handleRefreshSet();
+    }
+
+    setIsBusy(false);
+    setBusyMessage('');
+  };
+
+  // Action: Inyectar Variación Transformada (ppal-create-clip)
+  const handleApplyVariation = async (
+    variation: VariationPreset,
+    targetTrackPath: string,
+    targetSlot: string,
+    autoPlay: boolean
+  ) => {
+    setIsBusy(true);
+    const targetPath = `${targetTrackPath}/${targetSlot}`;
+    setBusyMessage(`Inyectando variación "${variation.name}" en ${targetPath}…`);
+
+    const res = await abletonClient.callTool('ppal-create-clip', {
+      path: targetPath,
+      name: `${variation.name} [Fill]`,
+      length: '4bar',
+      looping: true,
+      notes: variation.notesString,
+      transforms: variation.transforms,
+      gainDb: 0,
+      warpMode: 'beats',
+      auto: autoPlay ? 'play-clip' : 'none'
+    });
+
+    if (!res.isError) {
+      recordSnapshot(`Variación/Fill inyectado en ${targetPath}: "${variation.name}"`, liveSet, crateState);
+      await handleRefreshSet();
+    }
+
+    setIsBusy(false);
+    setBusyMessage('');
+  };
+
   // Action: Trigger Sonic Analysis
   const handleTriggerAnalysis = async () => {
     setIsAnalyzing(true);
@@ -627,6 +774,268 @@ export default function App() {
     await handleRefreshSet();
     setIsBusy(false);
     setBusyMessage('');
+  };
+
+  // Action: 1-Click EQ Curve Correction (FabFilter Pro-Q 4)
+  const handleApplyEqCorrection = async (correctionSummary: string) => {
+    setIsBusy(true);
+    setBusyMessage('Aplicando curva compensatoria a FabFilter Pro-Q 4 en Ableton Live…');
+    await abletonClient.callTool('ppal-update-device', {
+      path: 't0/d0',
+      params: [
+        { id: '1', value: 0.45 },
+        { id: '2', value: 0.62 }
+      ]
+    });
+    recordSnapshot(
+      `Mastering: ${correctionSummary}`,
+      liveSet,
+      crateState,
+      {
+        type: 'device-param',
+        devicePath: 't0/d0',
+        description: 'Compensación de ecualización en FabFilter Pro-Q 4'
+      }
+    );
+    setIsBusy(false);
+    setBusyMessage('');
+  };
+
+  // Action: Inyectar clip desde Piano Roll
+  const handleApplyPianoRollClip = async (clipData: {
+    trackPath: string;
+    name: string;
+    length: string;
+    notes: string;
+    looping: boolean;
+  }) => {
+    setIsBusy(true);
+    setBusyMessage(`Inyectando clip de Piano Roll a ${clipData.trackPath}…`);
+    const targetSlotPath = `${clipData.trackPath || 't0'}/s0`;
+    const res = await abletonClient.callTool('ppal-create-clip', {
+      path: targetSlotPath,
+      name: clipData.name,
+      length: clipData.length,
+      looping: clipData.looping,
+      notes: clipData.notes,
+      gainDb: 0,
+      warpMode: 'beats',
+      auto: 'play-clip'
+    });
+    if (!res.isError) {
+      recordSnapshot(`Clip de Piano Roll inyectado en ${targetSlotPath}: "${clipData.name}"`, liveSet, crateState);
+      await handleRefreshSet();
+    }
+    setIsBusy(false);
+    setBusyMessage('');
+  };
+
+  // Action: Inyectar progresión Neo-Soul
+  const handleApplyChordProgressionClip = async (clipData: {
+    trackPath: string;
+    name: string;
+    length: string;
+    notes: string;
+    looping: boolean;
+  }) => {
+    setIsBusy(true);
+    setBusyMessage(`Inyectando progresión Neo-Soul a ${clipData.trackPath}…`);
+    const targetSlotPath = `${clipData.trackPath || 't1'}/s0`;
+    const res = await abletonClient.callTool('ppal-create-clip', {
+      path: targetSlotPath,
+      name: clipData.name,
+      length: clipData.length,
+      looping: clipData.looping,
+      notes: clipData.notes,
+      gainDb: 0,
+      warpMode: 'beats',
+      auto: 'play-clip'
+    });
+    if (!res.isError) {
+      recordSnapshot(`Progresión Neo-Soul inyectada en ${targetSlotPath}: "${clipData.name}"`, liveSet, crateState);
+      await handleRefreshSet();
+    }
+    setIsBusy(false);
+    setBusyMessage('');
+  };
+
+  // Action: Inyectar clip con Sample Slicer
+  const handleApplySampleSlicerClip = async (clipData: {
+    trackPath: string;
+    name: string;
+    length: string;
+    sampleFile: string;
+    gainDb: number;
+    warpMode: string;
+    auto: string;
+  }) => {
+    setIsBusy(true);
+    setBusyMessage(`Inyectando clip con sample a ${clipData.trackPath}…`);
+    const targetSlotPath = `${clipData.trackPath || 't0'}/s0`;
+    const res = await abletonClient.callTool('ppal-create-clip', {
+      path: targetSlotPath,
+      name: clipData.name,
+      length: clipData.length,
+      looping: true,
+      sampleFile: clipData.sampleFile,
+      gainDb: clipData.gainDb,
+      warpMode: clipData.warpMode,
+      auto: clipData.auto
+    });
+    if (!res.isError) {
+      recordSnapshot(`Clip de sample MPC inyectado en ${targetSlotPath}: "${clipData.name}"`, liveSet, crateState);
+      await handleRefreshSet();
+    }
+    setIsBusy(false);
+    setBusyMessage('');
+  };
+
+  // Action: Inyectar patrón de batería MPC
+  const handleApplyDrumClip = async (clipData: {
+    trackPath: string;
+    name: string;
+    length: string;
+    notes: string;
+    looping: boolean;
+  }) => {
+    setIsBusy(true);
+    setBusyMessage(`Inyectando patrón de batería MPC en ${clipData.trackPath}…`);
+    const targetSlotPath = `${clipData.trackPath || 't0'}/s0`;
+    const res = await abletonClient.callTool('ppal-create-clip', {
+      path: targetSlotPath,
+      name: clipData.name,
+      length: clipData.length,
+      looping: clipData.looping,
+      notes: clipData.notes,
+      gainDb: 0,
+      warpMode: 'beats',
+      auto: 'play-clip'
+    });
+    if (!res.isError) {
+      recordSnapshot(`Batería MPC inyectada en ${targetSlotPath}: "${clipData.name}"`, liveSet, crateState);
+      await handleRefreshSet();
+    }
+    setIsBusy(false);
+    setBusyMessage('');
+  };
+
+  // Action: Aplicar Escena inmediata a The Infinite Crate
+  const handleApplyCrateScene = async (scene: CrateScene) => {
+    setIsBusy(true);
+    setBusyMessage(`Aplicando escena "${scene.name}" a The Infinite Crate…`);
+
+    const updatedCrate: InfiniteCrateState = {
+      ...crateState,
+      bright: scene.bright,
+      density: scene.density,
+      guidance: scene.guidance,
+      temp: scene.temp,
+      topk: scene.topk,
+      muteBass: scene.muteBass,
+      muteDrums: scene.muteDrums,
+      muteOther: scene.muteOther,
+      slots: scene.slots
+    };
+    setCrateState(updatedCrate);
+
+    const paramsList: { id: string; value: number }[] = [
+      { id: 'bright', value: scene.bright },
+      { id: 'density', value: scene.density },
+      { id: 'guidance', value: scene.guidance },
+      { id: 'temp', value: scene.temp },
+      { id: 'topk', value: scene.topk },
+      { id: 'mute bass', value: scene.muteBass ? 1 : 0 },
+      { id: 'mute drums', value: scene.muteDrums ? 1 : 0 },
+      { id: 'mute other', value: scene.muteOther ? 1 : 0 },
+      ...scene.slots.map((s) => ({ id: `prompt #${s.id}`, value: s.weight }))
+    ];
+
+    await abletonClient.callTool('ppal-update-device', {
+      path: crateState.devicePath || 't1/d1',
+      params: paramsList
+    });
+
+    recordSnapshot(`Escena Crate aplicada: "${scene.name}"`, liveSet, updatedCrate);
+    setIsBusy(false);
+    setBusyMessage('');
+  };
+
+  // Action: Morfosis progresiva de The Infinite Crate
+  const handleMorphCrateScene = async (targetScene: CrateScene, barsDuration: number) => {
+    setIsMorphingCrate(true);
+    setMorphProgress(0);
+
+    const totalSteps = 8;
+    const bpm = liveSet.tempo || 90;
+    const totalMs = barsDuration * 4 * (60000 / bpm);
+    const stepIntervalMs = Math.max(120, totalMs / totalSteps);
+
+    const initial = { ...crateState };
+
+    for (let step = 1; step <= totalSteps; step++) {
+      const alpha = step / totalSteps;
+
+      const interpolatedCrate: InfiniteCrateState = {
+        ...crateState,
+        bright: initial.bright + (targetScene.bright - initial.bright) * alpha,
+        density: initial.density + (targetScene.density - initial.density) * alpha,
+        guidance: initial.guidance + (targetScene.guidance - initial.guidance) * alpha,
+        temp: initial.temp + (targetScene.temp - initial.temp) * alpha,
+        topk: Math.round(initial.topk + (targetScene.topk - initial.topk) * alpha),
+        muteBass: alpha > 0.5 ? targetScene.muteBass : initial.muteBass,
+        muteDrums: alpha > 0.5 ? targetScene.muteDrums : initial.muteDrums,
+        muteOther: alpha > 0.5 ? targetScene.muteOther : initial.muteOther,
+        slots: initial.slots.map((s) => {
+          const targetSlot = targetScene.slots.find((ts) => ts.id === s.id);
+          const targetW = targetSlot ? targetSlot.weight : s.weight;
+          return {
+            ...s,
+            weight: Number((s.weight + (targetW - s.weight) * alpha).toFixed(2))
+          };
+        })
+      };
+
+      setCrateState(interpolatedCrate);
+      setMorphProgress((step / totalSteps) * 100);
+
+      const paramsList: { id: string; value: number }[] = [
+        { id: 'bright', value: Number(interpolatedCrate.bright.toFixed(2)) },
+        { id: 'density', value: Number(interpolatedCrate.density.toFixed(2)) },
+        { id: 'guidance', value: Number(interpolatedCrate.guidance.toFixed(1)) },
+        { id: 'temp', value: Number(interpolatedCrate.temp.toFixed(2)) },
+        { id: 'topk', value: interpolatedCrate.topk },
+        { id: 'mute bass', value: interpolatedCrate.muteBass ? 1 : 0 },
+        { id: 'mute drums', value: interpolatedCrate.muteDrums ? 1 : 0 },
+        { id: 'mute other', value: interpolatedCrate.muteOther ? 1 : 0 },
+        ...interpolatedCrate.slots.map((s) => ({ id: `prompt #${s.id}`, value: s.weight }))
+      ];
+
+      await abletonClient.callTool('ppal-update-device', {
+        path: crateState.devicePath || 't1/d1',
+        params: paramsList
+      });
+
+      if (step < totalSteps) {
+        await new Promise((r) => setTimeout(r, stepIntervalMs));
+      }
+    }
+
+    recordSnapshot(`Morfosis completada hacia "${targetScene.name}" (${barsDuration} bars)`, liveSet, {
+      ...crateState,
+      bright: targetScene.bright,
+      density: targetScene.density,
+      guidance: targetScene.guidance,
+      temp: targetScene.temp,
+      topk: targetScene.topk,
+      muteBass: targetScene.muteBass,
+      muteDrums: targetScene.muteDrums,
+      muteOther: targetScene.muteOther,
+      slots: targetScene.slots
+    });
+
+    setIsMorphingCrate(false);
+    setMorphProgress(100);
+    setTimeout(() => setMorphProgress(0), 1000);
   };
 
   // Action: Export Standard MIDI File
@@ -732,6 +1141,21 @@ export default function App() {
         case 'export-midi':
           handleExportMidi();
           break;
+        case 'open-pianoroll':
+          setIsPianoRollModalOpen(true);
+          break;
+        case 'open-chords':
+          setIsChordPaletteModalOpen(true);
+          break;
+        case 'open-slicer':
+          setIsSampleSlicerModalOpen(true);
+          break;
+        case 'open-drums':
+          setIsDrumSequencerOpen(true);
+          break;
+        case 'open-scenes':
+          setIsCrateScenesOpen(true);
+          break;
       }
     };
 
@@ -771,6 +1195,11 @@ export default function App() {
           abletonClient.setSimulatedMode(next);
           setIsConnected(!next);
         }}
+        onOpenPianoRoll={() => setIsPianoRollModalOpen(true)}
+        onOpenChordPalette={() => setIsChordPaletteModalOpen(true)}
+        onOpenSampleSlicer={() => setIsSampleSlicerModalOpen(true)}
+        onOpenDrumSequencer={() => setIsDrumSequencerOpen(true)}
+        onOpenCrateScenes={() => setIsCrateScenesOpen(true)}
       />
 
       {/* 2. 3-Column Main Studio Workspace */}
@@ -779,7 +1208,10 @@ export default function App() {
         <SetTreeColumn
           liveSet={liveSet}
           selectedTrackPath={selectedTrackPath}
-          onSelectTrack={(p) => setSelectedTrackPath(p)}
+          isAutoFocusEnabled={isAutoFocusEnabled}
+          onToggleAutoFocus={() => setIsAutoFocusEnabled(!isAutoFocusEnabled)}
+          onSelectTrack={handleSelectTrack}
+          onSelectDevice={handleSelectDevice}
           onUpdateDeviceParam={handleUpdateDeviceParam}
           onCreateTrack={handleCreateTrack}
           onDeleteTrack={handleDeleteTrack}
@@ -812,8 +1244,16 @@ export default function App() {
           onUpdateBrief={(u) => setVisualBrief((prev) => ({ ...prev, ...u }))}
           onDropImage={handleDropImage}
           onGenerate={handleGenerate}
+          onApplyLocators={handleApplyLocators}
+          onDuplicateClip={handleDuplicateClip}
+          onApplyVariation={handleApplyVariation}
           onApplyToDaw={handleApplyToDaw}
           onMutateSelectedClip={handleMutateSelectedClip}
+          onOpenPianoRoll={() => setIsPianoRollModalOpen(true)}
+          onOpenChordPalette={() => setIsChordPaletteModalOpen(true)}
+          onOpenSampleSlicer={() => setIsSampleSlicerModalOpen(true)}
+          onOpenDrumSequencer={() => setIsDrumSequencerOpen(true)}
+          onOpenCrateScenes={() => setIsCrateScenesOpen(true)}
           isBusy={isBusy}
           generatedMidiData={generatedMidiData}
           generatedLyrics={generatedLyrics}
@@ -829,7 +1269,12 @@ export default function App() {
           onUpdateCrateMute={handleUpdateCrateMute}
           onUpdateCratePromptWeight={handleUpdateCratePromptWeight}
           onUpdateCrateSlotLabel={handleUpdateCrateSlotLabel}
+          onApplyEqCorrection={handleApplyEqCorrection}
+          onOpenCrateScenes={() => setIsCrateScenesOpen(true)}
+          onApplyQuickScene={handleApplyCrateScene}
           isAnalyzing={isAnalyzing}
+          isCrateAutoPollActive={isCrateAutoPollActive}
+          onToggleCrateAutoPoll={() => setIsCrateAutoPollActive(!isCrateAutoPollActive)}
         />
       </main>
 
@@ -861,6 +1306,50 @@ export default function App() {
         onUndo={undo}
         onRedo={redo}
         onJumpToIndex={jumpToHistoryIndex}
+      />
+
+      {/* Feature 1: Piano Roll & MPC Groove Modal */}
+      <PianoRollModal
+        isOpen={isPianoRollModalOpen}
+        onClose={() => setIsPianoRollModalOpen(false)}
+        targetTrackPath={selectedTrackPath}
+        initialNotesString={generatedMidiData?.notesString}
+        onApplyClipToDaw={handleApplyPianoRollClip}
+      />
+
+      {/* Feature 2: Neo-Soul Chord Palette & Voicing Engine Modal */}
+      <ChordPaletteModal
+        isOpen={isChordPaletteModalOpen}
+        onClose={() => setIsChordPaletteModalOpen(false)}
+        targetTrackPath={selectedTrackPath}
+        onApplyClipToDaw={handleApplyChordProgressionClip}
+      />
+
+      {/* Feature 4: Sample Crate & 16-Pad MPC Slicer Modal */}
+      <SampleSlicerModal
+        isOpen={isSampleSlicerModalOpen}
+        onClose={() => setIsSampleSlicerModalOpen(false)}
+        targetTrackPath={selectedTrackPath}
+        onApplySampleClip={handleApplySampleSlicerClip}
+      />
+
+      {/* Creative Extension 1: MPC Drum Step Sequencer & Ghost Notes Modal */}
+      <DrumSequencerModal
+        isOpen={isDrumSequencerOpen}
+        onClose={() => setIsDrumSequencerOpen(false)}
+        targetTrackPath={selectedTrackPath}
+        onApplyDrumClipToDaw={handleApplyDrumClip}
+      />
+
+      {/* Creative Extension 2: Crate Production Scenes & Morph Timeline Modal */}
+      <CrateScenesModal
+        isOpen={isCrateScenesOpen}
+        onClose={() => setIsCrateScenesOpen(false)}
+        crateState={crateState}
+        onApplySceneToLive={handleApplyCrateScene}
+        onMorphSceneToLive={handleMorphCrateScene}
+        isMorphing={isMorphingCrate}
+        morphProgress={morphProgress}
       />
     </div>
   );

@@ -10,14 +10,18 @@ import {
   ShieldCheck,
   Disc3,
   Cpu,
-  Sparkles
+  Sparkles,
+  Target
 } from 'lucide-react';
 import { LiveDevice, LiveSet, LiveTrack } from '../types/ableton';
 
 interface Props {
   liveSet: LiveSet;
   selectedTrackPath: string;
+  isAutoFocusEnabled: boolean;
+  onToggleAutoFocus: () => void;
   onSelectTrack: (trackPath: string) => void;
+  onSelectDevice?: (devicePath: string) => void;
   onUpdateDeviceParam: (devicePath: string, paramId: string, value: number) => void;
   onCreateTrack: (type: 'midi' | 'audio', name: string) => void;
   onDeleteTrack: (trackPath: string, isBridge: boolean) => void;
@@ -28,7 +32,10 @@ interface Props {
 export const SetTreeColumn: React.FC<Props> = ({
   liveSet,
   selectedTrackPath,
+  isAutoFocusEnabled,
+  onToggleAutoFocus,
   onSelectTrack,
+  onSelectDevice,
   onUpdateDeviceParam,
   onCreateTrack,
   onDeleteTrack,
@@ -48,6 +55,9 @@ export const SetTreeColumn: React.FC<Props> = ({
       ...prev,
       [devPath]: !prev[devPath]
     }));
+    if (isAutoFocusEnabled && onSelectDevice) {
+      onSelectDevice(devPath);
+    }
   };
 
   const handleAddTrack = () => {
@@ -68,14 +78,30 @@ export const SetTreeColumn: React.FC<Props> = ({
           </h2>
         </div>
 
-        <button
-          onClick={() => setShowAddTrackDialog(true)}
-          className="p-1 text-xs text-[#8c93a0] hover:text-white bg-[#1a1d24] hover:bg-[#252934] border border-[#2b303c] rounded flex items-center gap-1 transition-colors"
-          title="Crear pista en Ableton (ppal-create-track)"
-        >
-          <Plus className="w-3.5 h-3.5 text-[#ff7034]" />
-          <span className="text-[11px]">Nueva</span>
-        </button>
+        <div className="flex items-center gap-1.5">
+          {/* Auto-Focus DAW toggle button */}
+          <button
+            onClick={onToggleAutoFocus}
+            className={`px-2 py-1 text-[10px] font-mono rounded flex items-center gap-1 border transition-colors cursor-pointer ${
+              isAutoFocusEnabled
+                ? 'bg-emerald-950/40 border-emerald-700/60 text-emerald-400'
+                : 'bg-[#181b22] border-[#262a34] text-[#8c93a0] hover:text-[#cfd5e0]'
+            }`}
+            title="Auto-Focus DAW: Al seleccionar pistas o plugins, Ableton Live los enfoca automáticamente en su pantalla"
+          >
+            <Target className="w-3 h-3" />
+            <span>{isAutoFocusEnabled ? 'Focus DAW' : 'Focus: Off'}</span>
+          </button>
+
+          <button
+            onClick={() => setShowAddTrackDialog(true)}
+            className="p-1 text-xs text-[#8c93a0] hover:text-white bg-[#1a1d24] hover:bg-[#252934] border border-[#2b303c] rounded flex items-center gap-1 transition-colors"
+            title="Crear pista en Ableton (ppal-create-track)"
+          >
+            <Plus className="w-3.5 h-3.5 text-[#ff7034]" />
+            <span className="text-[11px]">Nueva</span>
+          </button>
+        </div>
       </div>
 
       {/* Add Track Dialog */}

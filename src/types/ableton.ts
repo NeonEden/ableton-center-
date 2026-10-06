@@ -138,6 +138,16 @@ export interface SongSection {
   description: string;
 }
 
+export interface VariationPreset {
+  id: string;
+  name: string;
+  description: string;
+  targetTrackType: 'audio' | 'midi';
+  category: 'drums' | 'harmony';
+  notesString?: string;
+  transforms?: string;
+}
+
 export interface VstPlugin {
   name: string;
   vendor: string;

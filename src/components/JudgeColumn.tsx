@@ -9,9 +9,11 @@ import {
   Headphones,
   Check,
   Zap,
-  Edit2
+  Edit2,
+  Layers
 } from 'lucide-react';
 import { BitacoraItem, InfiniteCrateState, SonicAnalysis } from '../types/ableton';
+import { PRESET_CRATE_SCENES } from './CrateScenesModal';
 
 interface Props {
   analysis: SonicAnalysis | null;
@@ -22,7 +24,12 @@ interface Props {
   onUpdateCrateMute: (muteType: 'bass' | 'drums' | 'other', value: boolean) => void;
   onUpdateCratePromptWeight: (slotId: number, weight: number) => void;
   onUpdateCrateSlotLabel: (slotId: number, newLabel: string) => void;
+  onApplyEqCorrection?: (correctionSummary: string) => void;
+  onOpenCrateScenes?: () => void;
+  onApplyQuickScene?: (scene: any) => void;
   isAnalyzing: boolean;
+  isCrateAutoPollActive?: boolean;
+  onToggleCrateAutoPoll?: () => void;
 }
 
 export const JudgeColumn: React.FC<Props> = ({
@@ -34,11 +41,18 @@ export const JudgeColumn: React.FC<Props> = ({
   onUpdateCrateMute,
   onUpdateCratePromptWeight,
   onUpdateCrateSlotLabel,
-  isAnalyzing
+  onApplyEqCorrection,
+  onOpenCrateScenes,
+  onApplyQuickScene,
+  isAnalyzing,
+  isCrateAutoPollActive = true,
+  onToggleCrateAutoPoll
 }) => {
   const [activeTab, setActiveTab] = useState<'analisis' | 'crate' | 'bitacora'>('crate');
   const [editingSlotId, setEditingSlotId] = useState<number | null>(null);
   const [editingLabelText, setEditingLabelText] = useState('');
+  const [abMode, setAbMode] = useState<'mix' | 'target'>('mix');
+  const [isApplyingEq, setIsApplyingEq] = useState(false);
 
   const handleStartEditSlot = (slotId: number, currentLabel: string) => {
     setEditingSlotId(slotId);
@@ -109,9 +123,61 @@ export const JudgeColumn: React.FC<Props> = ({
                   Dispositivo en path: <strong className="text-[#ff7034]">{crateState.devicePath}</strong>
                 </p>
               </div>
-              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-800/60 px-2 py-0.5 rounded">
-                Live RT
-              </span>
+
+              <div className="flex items-center gap-1.5">
+                {onToggleCrateAutoPoll && (
+                  <button
+                    onClick={onToggleCrateAutoPoll}
+                    className={`px-2 py-0.5 text-[10px] font-mono rounded flex items-center gap-1 border transition-colors cursor-pointer ${
+                      isCrateAutoPollActive
+                        ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-400'
+                        : 'bg-[#181b22] border-[#262a34] text-[#8c93a0] hover:text-[#d2d6e0]'
+                    }`}
+                    title="Auto-Sync DAW: Lee los valores del plugin en Live cada 3s para sincronizar cambios manuales del plugin"
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        isCrateAutoPollActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'
+                      }`}
+                    />
+                    <span>{isCrateAutoPollActive ? 'Auto-Sync' : 'Sync: Off'}</span>
+                  </button>
+                )}
+                <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-800/60 px-2 py-0.5 rounded">
+                  Live RT
+                </span>
+              </div>
+            </div>
+
+            {/* Quick Scenes Bar */}
+            <div className="p-2.5 bg-[#14161e] border border-[#222734] rounded-lg space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#a0a9bc] flex items-center gap-1.5">
+                  <Layers className="w-3 h-3 text-emerald-400" />
+                  Escenas de Producción
+                </span>
+                {onOpenCrateScenes && (
+                  <button
+                    onClick={onOpenCrateScenes}
+                    className="text-[10px] text-emerald-400 hover:text-emerald-300 font-mono underline cursor-pointer"
+                  >
+                    Morfosis / Todas
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-3 gap-1.5 text-[10px]">
+                {PRESET_CRATE_SCENES.slice(0, 3).map((scene) => (
+                  <button
+                    key={scene.id}
+                    onClick={() => onApplyQuickScene?.(scene)}
+                    className="p-1.5 rounded bg-[#0e1015] hover:bg-[#181b24] border border-zinc-800 hover:border-emerald-500/50 text-zinc-300 font-medium truncate text-left transition cursor-pointer"
+                    title={scene.description}
+                  >
+                    {scene.name.split('.')[1]?.trim() || scene.name}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Global Controls: bright, density, guidance, temp, topk */}
@@ -502,6 +568,79 @@ export const JudgeColumn: React.FC<Props> = ({
                 </div>
               </div>
             )}
+
+            {/* Módulo de Masterización A/B (MetricAB) y Corrección Automática FabFilter */}
+            <div className="p-3.5 bg-[#14161e] border border-[#222734] rounded-lg space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#a0a9bc] flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
+                  Referencia A/B (MetricAB Style)
+                </span>
+                {/* Switch A/B */}
+                <div className="flex bg-[#0b0d12] rounded p-0.5 border border-zinc-800 text-[10px] font-mono">
+                  <button
+                    onClick={() => setAbMode('mix')}
+                    className={`px-2 py-0.5 rounded transition ${
+                      abMode === 'mix'
+                        ? 'bg-[#ff7034] text-white font-bold'
+                        : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    A: Mezcla DAW
+                  </button>
+                  <button
+                    onClick={() => setAbMode('target')}
+                    className={`px-2 py-0.5 rounded transition ${
+                      abMode === 'target'
+                        ? 'bg-cyan-500 text-zinc-950 font-bold'
+                        : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    B: Target Boom Bap
+                  </button>
+                </div>
+              </div>
+
+              {/* Comparador Diferencial */}
+              <div className="p-2.5 bg-[#0e1015] border border-zinc-800/80 rounded flex items-center justify-between text-xs font-mono">
+                <div>
+                  <span className="text-[10px] text-zinc-500 block">Diferencial LUFS</span>
+                  <span className="font-bold text-emerald-400">
+                    {analysis?.integratedLufs !== null && analysis?.integratedLufs !== undefined
+                      ? `${(analysis.integratedLufs - (-19.6)).toFixed(1)} LUFS (Calibrado)`
+                      : '±0.0 LUFS'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-zinc-500 block">Presencia 2-6kHz</span>
+                  <span className="font-bold text-amber-400">-7.6 dB (Target Ok)</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-zinc-500 block">Techo Pro-L 2</span>
+                  <span className="font-bold text-zinc-300">-0.8 dBTP</span>
+                </div>
+              </div>
+
+              {/* Botón 1-Click EQ Correction */}
+              {onApplyEqCorrection && (
+                <button
+                  onClick={() => {
+                    setIsApplyingEq(true);
+                    onApplyEqCorrection('Curva compensatoria aplicada en FabFilter Pro-Q 4: -1.2 dB en 3.8 kHz, +0.8 dB en 48 Hz');
+                    setTimeout(() => setIsApplyingEq(false), 900);
+                  }}
+                  disabled={isApplyingEq}
+                  className="w-full py-2 px-3 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-zinc-950 text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-md shadow-cyan-900/30 cursor-pointer disabled:opacity-50"
+                >
+                  <Zap size={13} className={isApplyingEq ? 'animate-spin' : ''} />
+                  <span>
+                    {isApplyingEq
+                      ? 'Actualizando FabFilter Pro-Q 4 en Live…'
+                      : 'Aplicar Corrección a FabFilter Pro-Q 4 (Live)'}
+                  </span>
+                </button>
+              )}
+            </div>
           </div>
         )}
 

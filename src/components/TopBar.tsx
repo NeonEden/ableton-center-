@@ -10,7 +10,11 @@ import {
   Radio,
   Undo2,
   Redo2,
-  History
+  History,
+  Music,
+  Scissors,
+  Disc3,
+  Layers
 } from 'lucide-react';
 import { LiveSet } from '../types/ableton';
 
@@ -19,7 +23,7 @@ interface Props {
   isConnected: boolean;
   isSimulated: boolean;
   isBusy: boolean;
-  busyMessage: string;
+  busyMessage?: string;
   isPlaying: boolean;
   saveStatus: 'saved' | 'saving' | 'idle';
   lastSavedTime: string;
@@ -38,6 +42,11 @@ interface Props {
   onExportMidi: () => void;
   onUpdateTempo: (bpm: number) => void;
   onToggleSimulationMode: () => void;
+  onOpenPianoRoll?: () => void;
+  onOpenChordPalette?: () => void;
+  onOpenSampleSlicer?: () => void;
+  onOpenDrumSequencer?: () => void;
+  onOpenCrateScenes?: () => void;
 }
 
 export const TopBar: React.FC<Props> = ({
@@ -63,7 +72,12 @@ export const TopBar: React.FC<Props> = ({
   onOpenVstBrowser,
   onExportMidi,
   onUpdateTempo,
-  onToggleSimulationMode
+  onToggleSimulationMode,
+  onOpenPianoRoll,
+  onOpenChordPalette,
+  onOpenSampleSlicer,
+  onOpenDrumSequencer,
+  onOpenCrateScenes
 }) => {
   return (
     <header className="h-14 bg-[#111317] border-b border-[#232731] px-4 flex items-center justify-between gap-4 select-none shrink-0 z-30">
@@ -207,6 +221,66 @@ export const TopBar: React.FC<Props> = ({
           <RefreshCw className={`w-3.5 h-3.5 ${isBusy ? 'animate-spin text-[#ff7034]' : 'text-[#8c93a0]'}`} />
           <span>Releer el set</span>
         </button>
+
+        {/* Piano Roll & MPC Groove */}
+        {onOpenPianoRoll && (
+          <button
+            onClick={onOpenPianoRoll}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-amber-300 bg-amber-950/30 hover:bg-amber-900/40 border border-amber-600/40 transition-colors"
+            title="Piano Roll Interactivo con MPC Swing y Humanizer"
+          >
+            <Sliders className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden xl:inline">Piano Roll</span>
+          </button>
+        )}
+
+        {/* Neo-Soul Chord Palette */}
+        {onOpenChordPalette && (
+          <button
+            onClick={onOpenChordPalette}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-indigo-300 bg-indigo-950/30 hover:bg-indigo-900/40 border border-indigo-600/40 transition-colors"
+            title="Banco Armónico Neo-Soul & Voicings Drop-2 / Rootless"
+          >
+            <Music className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="hidden xl:inline">Acordes Soul</span>
+          </button>
+        )}
+
+        {/* 16-Pad MPC Sample Slicer */}
+        {onOpenSampleSlicer && (
+          <button
+            onClick={onOpenSampleSlicer}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-orange-300 bg-orange-950/30 hover:bg-orange-900/40 border border-orange-600/40 transition-colors"
+            title="Sample Crate & 16-Pad MPC Slicer (ppal-library)"
+          >
+            <Scissors className="w-3.5 h-3.5 text-orange-400" />
+            <span className="hidden xl:inline">Slicer MPC</span>
+          </button>
+        )}
+
+        {/* MPC Drum Sequencer */}
+        {onOpenDrumSequencer && (
+          <button
+            onClick={onOpenDrumSequencer}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-amber-300 bg-amber-950/30 hover:bg-amber-900/40 border border-amber-600/40 transition-colors"
+            title="Secuenciador de Baterías MPC & Ghost Notes"
+          >
+            <Disc3 className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden xl:inline">Batería MPC</span>
+          </button>
+        )}
+
+        {/* Crate Scenes Morphing */}
+        {onOpenCrateScenes && (
+          <button
+            onClick={onOpenCrateScenes}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-emerald-300 bg-emerald-950/30 hover:bg-emerald-900/40 border border-emerald-600/40 transition-colors"
+            title="Escenas y Morfosis de The Infinite Crate (Lyria RT)"
+          >
+            <Layers className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden xl:inline">Escenas Crate</span>
+          </button>
+        )}
 
         {/* VST3 Plugins */}
         <button

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { VstPlugin } from '../types/ableton';
 import { Search, Sliders, CheckCircle2, Plus, Sparkles, X } from 'lucide-react';
 
@@ -143,6 +143,16 @@ export const VstBrowserModal: React.FC<Props> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedTrack, setSelectedTrack] = useState<string>(tracks[0]?.path || 't0');
   const [insertedPluginName, setInsertedPluginName] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleEsc);
+      return () => window.removeEventListener('keydown', handleEsc);
+    }
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 

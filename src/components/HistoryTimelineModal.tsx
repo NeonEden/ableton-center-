@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Undo2, Redo2, Clock, CheckCircle2, History, X, ArrowDown } from 'lucide-react';
 import { DawHistorySnapshot } from '../types/ableton';
 
@@ -33,6 +33,16 @@ export const HistoryTimelineModal: React.FC<Props> = ({
   onRedo,
   onJumpToIndex
 }) => {
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleEsc);
+      return () => window.removeEventListener('keydown', handleEsc);
+    }
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (

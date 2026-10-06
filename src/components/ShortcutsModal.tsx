@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Keyboard, X, RotateCcw, Check } from 'lucide-react';
 import { ShortcutConfig } from '../types/ableton';
 
@@ -12,7 +12,12 @@ export const DEFAULT_SHORTCUTS: ShortcutConfig[] = [
   { id: 'sc_analyze', label: 'Escuchar y medir mezcla (LUFS)', key: 'a', actionName: 'analyze' },
   { id: 'sc_mutate', label: 'Mutar clip seleccionado', key: 'm', actionName: 'mutate-clip' },
   { id: 'sc_vst', label: 'Abrir biblioteca VST3 (528 plugins)', key: 'v', actionName: 'open-vst' },
-  { id: 'sc_export_midi', label: 'Exportar proyecto a MIDI estándar', key: 'e', actionName: 'export-midi' }
+  { id: 'sc_export_midi', label: 'Exportar proyecto a MIDI estándar', key: 'e', actionName: 'export-midi' },
+  { id: 'sc_pianoroll', label: 'Abrir Piano Roll MPC', key: 'p', actionName: 'open-pianoroll' },
+  { id: 'sc_chords', label: 'Abrir Banco Armónico Neo-Soul', key: 'c', actionName: 'open-chords' },
+  { id: 'sc_slicer', label: 'Abrir Sample Slicer MPC', key: 's', actionName: 'open-slicer' },
+  { id: 'sc_drums', label: 'Abrir Secuenciador de Baterías', key: 'b', actionName: 'open-drums' },
+  { id: 'sc_scenes', label: 'Abrir Escenas de The Infinite Crate', key: 't', actionName: 'open-scenes' }
 ];
 
 interface Props {
@@ -29,6 +34,16 @@ export const ShortcutsModal: React.FC<Props> = ({
   onUpdateShortcuts
 }) => {
   const [activeRecordingId, setActiveRecordingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !activeRecordingId) onClose();
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleEsc);
+      return () => window.removeEventListener('keydown', handleEsc);
+    }
+  }, [isOpen, activeRecordingId, onClose]);
 
   if (!isOpen) return null;
 
